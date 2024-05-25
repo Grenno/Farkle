@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farkle</title>
+  <style>
+    body {
+      font-family: 'Xirwena';
+      text-align: center;
+      background-color: #EBD5B3;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      color: red;
+    }
+
+    #scoreboard {
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+
+    .dice {
+      display: inline-block;
+      width: 48px;
+      height: 48px;
+      border: 1px solid #000;
+	  border-radius: 10%;
+      margin: 5px;
+      position: relative;
+      cursor: pointer;
+      background-color: #FFF;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      background-color: #000;
+      border-radius: 50%;
+      position: absolute;
+    }
+
+    #player-dice-container {
+      margin-bottom: 40px;
+    }
+
+    #pegg-dice-container {
+      margin-bottom: 20px;
+    }
+
+    #choices-container {
+      margin-bottom: 10px;
+    }
+
+    #choices-container button {
+      margin-right: 10px;
+      font-size: 16px;
+      padding: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Farkle</h1>
+<p style="font-family: Garamond" id="player-scoreboard">Player Score: 0</p> 
+<div id="player-dice-container"></div>
+<p style="font-family: Garamond" id="computer-scoreboard">Penniless Score: 0</p> 
+<div id="pegg-dice-container"></div>
+<div id="choices-container">
+  <button onclick="rerollDice()">Keep and Reroll</button>
+  <button onclick="bankScore()">Score and Pass</button>
+</div>
+<button id="roll-btn" onclick="rollDice()">Start Game</button>
+
+<script>
+  let playerScore = 0;
+  let peggScore = 0;
+  let currentTurnScore = 0;
+  let currentPlayerDice = [];
+  let peggDice = [];
+  let heldDice = [];
+
+  document.getElementById('roll-btn').addEventListener('click', function() {
+    // Change the text of the button to "Forfeit"
+    this.textContent = "Forfeit";
+    
+	rollDice();
+  });
+
+  function rollDice() {
+    currentPlayerDice = [];
+    peggDice = [];
+    document.getElementById('player-dice-container').innerHTML = '';
+    document.getElementById('pegg-dice-container').innerHTML = '';
+
+    for (let i = 0; i < 6; i++) {
+      const diceValue = Math.floor(Math.random() * 6) + 1;
+      currentPlayerDice.push({ value: diceValue, held: false });
+
+      const diceElement = createDiceElement(diceValue);
+      diceElement.onclick = () => toggleHold(i);
+      document.getElementById('player-dice-container').appendChild(diceElement);
+    }
+
+    // Penniless Pegg's turn
+    for (let i = 0; i < 6; i++) {
+      const diceValue = Math.floor(Math.random() * 6) + 1;
+      peggDice.push(diceValue);
+
+      const diceElement = createDiceElement(diceValue);
+      document.getElementById('pegg-dice-container').appendChild(diceElement);
+    }
+
+    calculateScore();
+  }
+
+  function createDiceElement(diceValue) {
+    const diceElement = document.createElement('div');
+    diceElement.classList.add('dice');
+
+    switch (diceValue) {
+      case 1:
+        diceElement.appendChild(createDot(19, 19)); // One dot in the center
+        break;
+      case 2:
+        diceElement.appendChild(createDot(6, 6)); // Dot in NE corner
+        diceElement.appendChild(createDot(32, 32)); // Dot in SW corner
+        break;
+      case 3:
+        diceElement.appendChild(createDot(19, 19)); // One dot in the center
+        diceElement.appendChild(createDot(6, 6)); // Dot in NE corner
+        diceElement.appendChild(createDot(32, 32)); // Dot in SW corner
+        break;
+      case 4:
+        diceElement.appendChild(createDot(6, 6)); // Dot in NE corner
+        diceElement.appendChild(createDot(6, 32)); // Dot in NW corner
+        diceElement.appendChild(createDot(32, 6)); // Dot in SE corner
+        diceElement.appendChild(createDot(32, 32)); // Dot in SW corner
+        break;
+      case 5:
+        diceElement.appendChild(createDot(19, 19)); // One dot in the center
+        diceElement.appendChild(createDot(6, 6)); // Dot in NE corner
+        diceElement.appendChild(createDot(6, 32)); // Dot in NW corner
+        diceElement.appendChild(createDot(32, 6)); // Dot in SE corner
+        diceElement.appendChild(createDot(32, 32)); // Dot in SW corner
+        break;
+      case 6:
+        diceElement.appendChild(createDot(6, 6)); // First column
+        diceElement.appendChild(createDot(19, 6));
+        diceElement.appendChild(createDot(32, 6));
+        diceElement.appendChild(createDot(32, 32)); // Center column
+        diceElement.appendChild(createDot(19, 32)); 
+        diceElement.appendChild(createDot(6, 32));
+        break;
+      default:
+        // Handle invalid dice values
+		alert("Invalid dice value!");
+        break;
+    }
+
+    return diceElement;
+  }
+
+  // Function to position dots in a coordinate plane, to be called by createDiceElement
+  function createDot(top, left) {
+    const dot = document.createElement('div');
+    dot.classList.add('dot');
+    dot.style.top = `${top}px`;
+    dot.style.left = `${left}px`;
+    return dot;
+  }
+
+  function toggleHold(i) {
+    currentPlayerDice[i].held = !currentPlayerDice[i].held;
+    updateHeldDiceUI();
+  }
+
+  function updateHeldDiceUI() {
+    const playerDiceContainer = document.getElementById('player-dice-container');
+    playerDiceContainer.innerHTML = '';
+
+    for (let i = 0; i < 6; i++) {
+      const diceValue = currentPlayerDice[i].value;
+      const held = currentPlayerDice[i].held;
+
+      const diceElement = createDiceElement(diceValue);
+      diceElement.onclick = () => toggleHold(i);
+      if (held) {
+        diceElement.style.backgroundColor = '#ccc';
+      }
+      playerDiceContainer.appendChild(diceElement);
+    }
+  }
+
+  function holdDice() {
+    heldDice = currentPlayerDice.filter(dice => dice.held).map(dice => dice.value);
+    rerollDice();
+  }
+  
+  function rerollDice() {
+    // Filter out the held dice before rerolling
+    const diceToReroll = currentPlayerDice.filter(dice => !dice.held);
+
+    // Reroll only the dice that are not held
+    const newDice = diceToReroll.map(dice => ({
+        value: Math.floor(Math.random() * 6) + 1,
+        held: false,
+    }));
+
+    // Combine the newly rolled dice with the held dice
+    currentPlayerDice = newDice.concat(currentPlayerDice.filter(dice => dice.held));
+
+    // Update the UI and calculate the score
+    updateHeldDiceUI();
+    calculateScore();
+
+    // Check for Farkle
+    if (calculateDynamicScore() === 0) {
+        alert("Farkle!"); // Display Farkle message
+        playerScore -= currentTurnScore; // Deduct current turn score from player's total score
+        currentTurnScore = 0; // Reset current turn score to 0
+        endTurn(); // End the player's turn
+        simulatePeggTurn(); // Proceed with Penniless Pegg's turn
+    }
+}
+
+  function calculateDynamicScore() {
+    let counts = Array(7).fill(0);
+    let score = 0;
+
+    for (const dice of currentPlayerDice) {
+      if (dice.held) {
+        counts[dice.value]++;
+      }
+    }
+
+    // Calculate score based on rules
+    score += counts[1] * 100; // Each 1 is 100 points
+    score += counts[5] * 50;  // Each 5 is 50 points
+
+    for (let i = 2; i <= 6; i++) {
+      if (counts[i] >= 3) {
+        score += i * 100;  // Three of a kind
+
+        // Four of a kind is worth double the associated three of a kind
+        if (counts[i] === 4) {
+          score += i * 100;
+        }
+
+        // Five of a kind is worth 3x the associated three of a kind
+        if (counts[i] === 5) {
+          score += i * 100 * 3;
+        }
+
+        // Six of a kind is worth 4x the associated three of a kind
+        if (counts[i] === 6) {
+          score += i * 100 * 4;
+        }
+      }
+    }
+
+    // Additional scoring rules
+    if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5]) {
+      // 1000-valued straight (1, 2, 3, 4, 5 or 2, 3, 4, 5, 6)
+      score += 1000;
+    }
+
+    if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5] && counts[6]) {
+      // 2000-valued straight (1, 2, 3, 4, 5, 6)
+      score += 1000;
+    }
+
+    return score;
+  }
+
+  function calculateScore() {
+    currentTurnScore = calculateDynamicScore();
+    document.getElementById('player-scoreboard').textContent = `Player Score: ${playerScore} | Current Turn Score: ${currentTurnScore}`;
+	document.getElementById('computer-scoreboard').textContent = 'Penniless Pegg Score: ${peggScore}';
+  }
+
+  function bankScore() {
+    playerScore += currentTurnScore;
+    document.getElementById('player-scoreboard').textContent = `Player Score: ${playerScore}`;
+	document.getElementById('computer-scoreboard').textContent = 'Penniless Pegg Score: ${peggScore}';
+
+    // Computer's turn
+    simulatePeggTurn();
+  }
+
+function simulatePeggTurn() {
+    let peggTurnScore = 0;
+
+    // Simulate rolling dice
+    peggDice = Array(6).fill(0).map(() => Math.floor(Math.random() * 6) + 1);
+
+    // Determine which dice Penniless Pegg will hold or reroll based on probability
+    const holdOrReroll = determineHoldOrReroll(peggDice);
+
+    // Update held dice based on Penniless Pegg's decision
+    heldDice = holdOrReroll.heldDice;
+    peggDice = holdOrReroll.rerolledDice;
+
+    // Calculate the turn score based on the held dice
+    const heldCounts = countDiceValues(heldDice);
+    peggTurnScore = calculateScoreForPeggTurn(heldCounts);
+
+    // Update Penniless Pegg's total score and display it
+    peggScore += peggTurnScore;
+    document.getElementById('scoreboard').textContent = `Player Score: ${playerScore} | Penniless Pegg Score: ${peggScore} | Penniless Pegg scored ${peggTurnScore} on this turn.`;
+
+    // Check for winner
+    if (playerScore >= 5000 || peggScore >= 5000) {
+        endGame();
+    } else {
+        // Reset held dice for the next turn
+        heldDice = [];
+    }
+}
+
+// Function to determine Penniless Pegg's strategy for holding or rerolling dice
+function determineHoldOrReroll(dice) {
+    // Calculate probabilities for each possible outcome (based on current dice)
+    // You can implement more sophisticated probability calculations based on game rules
+    // For simplicity, this example assumes Penniless Pegg holds any dice that score points
+    const remainingDice = dice.filter(die => !heldDice.includes(die));
+    const remainingCounts = countDiceValues(remainingDice);
+    const remainingScore = calculateScoreForPeggTurn(remainingCounts);
+
+    // Decide which dice Penniless Pegg will hold or reroll
+    const heldDice = remainingDice.filter(die => calculateScoreForPeggTurn(countDiceValues([...heldDice, die])) > remainingScore);
+    const rerolledDice = remainingDice.filter(die => !heldDice.includes(die));
+
+    return { heldDice, rerolledDice };
+}
+
+  function endGame() {
+    let message;
+
+    if (playerScore >= 5000 && peggScore >= 5000) {
+      message = "It's a tie!";
+    } else if (playerScore >= 5000) {
+      // You can add more randomized dialogue here for variety
+      const messages = [
+        "Lucky, yer jest lucky, that's all!",
+        "Ye've got some skills, but luck plays its part!",
+        "Pegg bows to your superior Farkle prowess!"
+      ];
+      message = messages[Math.floor(Math.random() * messages.length)];
+    } else {
+      // You can add more randomized dialogue here for variety
+      const messages = [
+        "Harr, thought ye could best ole Pegg, did yer?",
+        "Ye tried yer best, but Pegg's luck is unmatched!",
+        "Pegg remains the Farkle champion of the seas!"
+      ];
+      message = messages[Math.floor(Math.random() * messages.length)];
+    }
+
+    alert(message);
+
+    // Reset scores for a new game
+    playerScore = 0;
+    peggScore = 0;
+    document.getElementById('scoreboard').textContent = `Player Score: 0 | Penniless Pegg Score: 0 | Current Turn Score: 0`;
+  }
+</script>
+</body>
+</html>
+
